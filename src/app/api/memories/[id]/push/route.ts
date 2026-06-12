@@ -76,10 +76,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   };
   if (sha) pushBody.sha = sha;
 
-  const pushResult = await githubRequest(`/contents/${filePath}`, "PUT", pushBody) as Record<string, unknown>;
-  const commitData = pushResult.commit as Record<string, unknown> | undefined;
-  const commitSha: string = (commitData?.sha as string) ?? "";
-
-  const updated = await markMemoryAsPushed(id, commitSha, filePath, commitMsg);
-  return NextResponse.json({ ok: true, memory: updated, filePath, commitSha });
+  try {
+    const pushResult = await githubRequest(`/contents/${filePath}`, "PUT", pushBody) as Record<string, unknown>;
+    const commitData = pushResult.commit as Record<string, unknown> | undefined;
+    const commitSha: string = (commitData?.sha as string) ?? "";
+    const updated = await markMemoryAsPushed(id, commitSha, filePath, commitMsg);
+    return NextResponse.json({ ok: true, memory: updated, filePath, commitSha });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "GitHub push 失败";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 }
