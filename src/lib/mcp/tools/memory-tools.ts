@@ -1,6 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getMemoriesByUser, createMemory, getMemoryById, markMemoryAsPushed } from "@/lib/db/queries/memories";
+import { createCommunityPost, updateCommunityPostStatus } from "@/lib/db/queries/community-posts";
+
+const COMMUNITY_URLS: Record<string, string> = {
+  zh: "https://csbc.lilozkzy.top/api/posts",
+  en: "https://encsbc.lilozkzy.top/api/posts",
+};
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_REPO = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
