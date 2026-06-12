@@ -100,7 +100,7 @@ export default function HomeScreen({ stats }: HomeScreenProps) {
             className="text-[10px] bg-black/50 px-2 py-0.5 border border-[color:var(--app-border)] rounded text-[var(--app-text-secondary)]"
             style={{ fontFamily: "var(--font-body)" }}
           >
-            {user?.username || "lilozhao"}
+            {(user as { username?: string } | null)?.username || "lilozhao"}
           </span>
         </div>
       </div>
