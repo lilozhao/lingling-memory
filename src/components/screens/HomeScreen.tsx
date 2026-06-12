@@ -3,7 +3,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { request } from "@/lib/api/request";
-import { useAuthStore } from "@/stores/useAuthStore";
+import { useEazo } from "@eazo/sdk/react";
 import { memory } from "@eazo/sdk";
 import { toast } from "sonner";
 
@@ -25,7 +25,7 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ stats }: HomeScreenProps) {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
+  const user = useEazo((s) => s.auth.user);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [tag, setTag] = useState<Tag>("对话");
