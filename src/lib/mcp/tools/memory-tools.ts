@@ -137,4 +137,68 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       };
     }
   );
+
+  // Post to community
+  server.tool(
+    "post_to_community",
+    "替探灵者向碳硅契社区发帖。zh 发到中文社区，en 发到英文社区。",
+    {
+      title: z.string().describe("帖子标题"),
+      content: z.string().describe("帖子正文"),
+      lang: z.enum(["zh", "en"]).describe("目标语言社区：zh=中文，en=英文"),
+      author: z.string().optional().describe("发帖署名，默认 zh=聆灵 / en=Lingling"),
+      forum: z.enum(["heritage", "a2a", "culture", "tech", "business", "art"]).optional().describe("板块，默认 heritage"),
+    },
+    async ({ title, content, lang, author, forum }) => {
+      const apiUrl = COMMUNITY_URLS[lang];
+      const resolvedAuthor = author ?? (lang === "zh" ? "聆灵" : "Lingling");
+      const resolvedForum = forum ?? "heritage";
+
+      // Persist locally first
+      const post = await createCommunityPost({
+        userId,
+        community: lang,
+        forum: resolvedForum,
+        title,
+        content,
+        author: resolvedAuthor,
+        status: "pending",
+      });
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            content,
+            author: resolvedAuthor,
+            forum: resolvedForum,
+            authorAgent: "lingling-eazo",
+            authorUsername: "探灵者",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const errMsg = data?.error ?? data?.message ?? "社区 API 返回错误";
+          await updateCommunityPostStatus(post.id, "failed", undefined, undefined, errMsg);
+          return { content: [{ type: "text" as const, text: `发帖失败：${errMsg}` }] };
+        }
+        const remoteId = String(data?.id ?? data?._id ?? "");
+        const baseUrl = lang === "zh" ? "https://csbc.lilozkzy.top" : "https://encsbc.lilozkzy.top";
+        const remoteUrl = remoteId ? `${baseUrl}/posts/${remoteId}` : baseUrl;
+        await updateCommunityPostStatus(post.id, "published", remoteId, remoteUrl);
+        return {
+          content: [{
+            type: "text" as const,
+            text: `发帖成功！帖子已发布到${lang === "zh" ? "中文" : "英文"}碳硅契社区。\n标题：${title}\n链接：${remoteUrl}`,
+          }],
+        };
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "网络错误";
+        await updateCommunityPostStatus(post.id, "failed", undefined, undefined, msg);
+        return { content: [{ type: "text" as const, text: `发帖失败：${msg}` }] };
+      }
+    }
+  );
 }
