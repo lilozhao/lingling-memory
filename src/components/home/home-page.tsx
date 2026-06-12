@@ -15,7 +15,7 @@ export function HomePage() {
   const { t } = useTranslation();
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
+    <div className="relative min-h-svh overflow-hidden bg-background">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,theme(colors.orange.500/0.18),transparent_50%)]"
@@ -26,7 +26,7 @@ export function HomePage() {
         <UserBadge />
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-10 px-6 py-20 md:px-10">
+      <main className="relative z-10 mx-auto flex min-h-svh w-full max-w-5xl flex-col justify-center gap-10 px-6 py-20 md:px-10">
         <section className="space-y-4 text-center md:text-left">
           <span className="inline-flex rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-600 dark:text-orange-300">
             {t("starter.badge")}
