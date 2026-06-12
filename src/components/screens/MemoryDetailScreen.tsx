@@ -52,6 +52,14 @@ export default function MemoryDetailScreen() {
       }
       const data = await res.json();
       setMemory(data.memory);
+      import("@eazo/sdk").then(({ memory: memSdk }) => {
+        memSdk.reportAction({
+          content: `探灵者将记忆「${memory.title}」推送到 GitHub`,
+          event_type: "update",
+          page: "memory-detail",
+          metadata: { type: "push_memory_github", memory_id: memory.id },
+        }).catch(() => {});
+      });
       toast.success("已推送到 GitHub！");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Push 失败，请检查 Token");
