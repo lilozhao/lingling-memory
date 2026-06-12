@@ -8,37 +8,43 @@ const COMMUNITY_URLS: Record<string, string> = {
   en: "https://encsbc.lilozkzy.top/api/posts",
 };
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_REPO = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
+function getGithubEnv() {
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
+  return { token, repo };
+}
 
 async function githubPushFile(filePath: string, content: string, commitMsg: string): Promise<{ sha: string }> {
+  const { token, repo } = getGithubEnv();
+  if (!token) throw new Error("GITHUB_TOKEN 未配置");
   const encoded = Buffer.from(content, "utf-8").toString("base64");
   let sha: string | undefined;
   try {
-    const checkRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`, {
-      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
+    const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
     });
     if (checkRes.ok) {
       const data = await checkRes.json();
-      sha = data.sha;
+      sha = (data as Record<string, unknown>).sha as string | undefined;
     }
   } catch { /* new file */ }
 
   const body: Record<string, unknown> = { message: commitMsg, content: encoded, branch: "main" };
   if (sha) body.sha = sha;
 
-  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`, {
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
     method: "PUT",
     headers: {
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   });
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.message ?? "GitHub push failed");
-  return { sha: result.commit?.sha ?? "" };
+  let result: Record<string, unknown>;
+  try { result = await res.json(); } catch { result = {}; }
+  if (!res.ok) throw new Error(`GitHub ${res.status}: ${(result.message as string) ?? "push failed"}`);
+  return { sha: ((result.commit as Record<string, unknown>)?.sha as string) ?? "" };
 }
 
 export function registerMemoryTools(server: McpServer, userId: string) {
