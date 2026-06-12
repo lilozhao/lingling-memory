@@ -106,7 +106,8 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       if (!mem || mem.userId !== userId) {
         return { content: [{ type: "text" as const, text: "记忆不存在或无权限" }] };
       }
-      if (!GITHUB_TOKEN) {
+      const { token: ghToken } = getGithubEnv();
+      if (!ghToken) {
         return { content: [{ type: "text" as const, text: "GITHUB_TOKEN 未配置，无法推送" }] };
       }
       const dateStr = new Date(mem.createdAt).toISOString().slice(0, 10);
