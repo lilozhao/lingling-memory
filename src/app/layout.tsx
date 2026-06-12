@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
+import { Noto_Serif_SC, Share_Tech_Mono } from "next/font/google";
 import { EazoProvider } from "@eazo/sdk/react";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -10,6 +11,18 @@ import { LocaleSyncEffect } from "@/components/i18n/locale-sync-effect";
 import { getServerLocale } from "@/lib/i18n/server-preference";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const notoSerifSC = Noto_Serif_SC({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-heading",
+  display: "swap",
+});
+const shareTechMono = Share_Tech_Mono({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -58,7 +71,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       suppressHydrationWarning
-      className={cn("h-full antialiased", "font-sans", geist.variable)}
+      className={cn("h-full antialiased", "font-sans", geist.variable, notoSerifSC.variable, shareTechMono.variable)}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider>
