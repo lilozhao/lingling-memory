@@ -210,6 +210,45 @@ export default function HomeScreen({ stats }: HomeScreenProps) {
           </div>
         </motion.div>
 
+        {/* Community Post Quick Links */}
+        <motion.div
+          className="flex gap-2"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut", delay: 0.12 }}
+        >
+          <motion.div
+            className="ancient-border bg-black/40 p-3 rounded-lg flex-1 flex justify-between items-center cursor-pointer"
+            whileTap={{ scale: 0.97 }}
+            onClick={() => router.push("/post-compose")}
+          >
+            <span className="text-[10px] text-[var(--app-text-secondary)] tracking-widest flex items-center gap-1.5" style={{ fontFamily: "var(--font-heading)" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+              </svg>
+              发帖到社区
+            </span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--app-text-muted)]">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </motion.div>
+          <motion.div
+            className="ancient-border bg-black/40 p-3 rounded-lg flex-1 flex justify-between items-center cursor-pointer"
+            whileTap={{ scale: 0.97 }}
+            onClick={() => router.push("/post-history")}
+          >
+            <span className="text-[10px] text-[var(--app-text-secondary)] tracking-widest flex items-center gap-1.5" style={{ fontFamily: "var(--font-heading)" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/>
+              </svg>
+              帖子记录
+            </span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--app-text-muted)]">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </motion.div>
+        </motion.div>
+
         {/* Editor Block */}
         <motion.div
           className="ancient-border bg-[rgba(255,255,255,0.015)] p-4 rounded-lg flex flex-col gap-3"
