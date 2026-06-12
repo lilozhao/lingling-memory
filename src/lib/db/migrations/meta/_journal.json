@@ -8,6 +8,13 @@
       "when": 1781257363715,
       "tag": "0000_old_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781259118062,
+      "tag": "0001_pretty_snowbird",
+      "breakpoints": true
     }
   ]
 }
