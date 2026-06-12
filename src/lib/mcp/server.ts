@@ -1,14 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerMemoryTools } from "./tools/memory-tools";
 
-export function buildMcpServer(_userId: string): McpServer {
+export function buildMcpServer(userId: string): McpServer {
   const server = new McpServer({
-    name: "eazo-mcp",
+    name: "lingling-memory-mcp",
     version: "1.0.0",
   });
 
-  // Register your tools here. See AGENTS.md § 8 for the pattern:
-  //   import { registerMyTool } from "./tools/my-tool";
-  //   registerMyTool(server, _userId);
+  registerMemoryTools(server, userId);
 
   return server;
 }
