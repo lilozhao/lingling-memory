@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getMemoryById, markMemoryAsPushed } from "@/lib/db/queries/memories";
 
+function normalizeRepo(raw: string): string {
+  // Strip https://github.com/ prefix and .git suffix, keep owner/repo
+  return raw
+    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/\.git$/, "")
+    .trim();
+}
+
 function getGithubConfig() {
   const token = process.env.GITHUB_TOKEN;
-  const repo = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
+  const raw = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
+  const repo = normalizeRepo(raw);
   return { token, repo };
 }
 

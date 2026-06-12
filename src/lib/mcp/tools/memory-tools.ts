@@ -8,9 +8,17 @@ const COMMUNITY_URLS: Record<string, string> = {
   en: "https://encsbc.lilozkzy.top/api/posts",
 };
 
+function normalizeRepo(raw: string): string {
+  return raw
+    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/\.git$/, "")
+    .trim();
+}
+
 function getGithubEnv() {
   const token = process.env.GITHUB_TOKEN;
-  const repo = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
+  const raw = process.env.GITHUB_REPO ?? "lilozhao/lingling-memory";
+  const repo = normalizeRepo(raw);
   return { token, repo };
 }
 
