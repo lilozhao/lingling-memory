@@ -213,10 +213,6 @@ export function registerMemoryTools(server: McpServer, userId: string) {
           content: `**时间：** ${now}\n**社区：** ${commLabel}\n**板块：** ${resolvedForum}\n**链接：** ${remoteUrl}\n\n---\n\n${content}`,
           tag: "社区互动",
           isPushed: false,
-          pushedAt: null,
-          commitSha: null,
-          filePath: null,
-          commitMessage: null,
         }).catch(() => { /* non-blocking */ });
 
         return {
