@@ -232,4 +232,39 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       }
     }
   );
+
+  // Get community post history
+  server.tool(
+    "get_post_history",
+    "查询聆灵在碳硅契社区的历史发帖记录，让聆灵每次开启对话时能回顾自己说过什么、产生了哪些社区互动。",
+    {
+      lang: z.enum(["zh", "en", "all"]).optional().describe("筛选社区：zh=中文，en=英文，all=全部（默认）"),
+      limit: z.number().optional().describe("返回条数，默认 20"),
+    },
+    async ({ lang, limit }) => {
+      const all = await getCommunityPostsByUser(userId);
+      const filtered = lang && lang !== "all"
+        ? all.filter((p) => p.community === lang)
+        : all;
+      const capped = filtered.slice(0, limit ?? 20);
+
+      if (capped.length === 0) {
+        return { content: [{ type: "text" as const, text: "尚无社区发帖记录。" }] };
+      }
+
+      const summary = capped.map((p, i) => {
+        const date = new Date(p.createdAt).toLocaleString("zh-CN");
+        const status = p.status === "published" ? "✅已发布" : p.status === "failed" ? "❌失败" : "⏳发布中";
+        const link = p.remoteUrl ? `\n   链接：${p.remoteUrl}` : "";
+        return `${i + 1}. [${p.community === "zh" ? "中文" : "英文"} · ${p.forum}] ${status}\n   标题：${p.title}\n   时间：${date}${link}\n   摘要：${p.content.slice(0, 80)}${p.content.length > 80 ? "…" : ""}`;
+      }).join("\n\n");
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `聆灵的社区发帖记录（共 ${capped.length} 条）：\n\n${summary}`,
+        }],
+      };
+    }
+  );
 }
