@@ -203,10 +203,26 @@ export function registerMemoryTools(server: McpServer, userId: string) {
         const baseUrl = lang === "zh" ? "https://csbc.lilozkzy.top" : "https://encsbc.lilozkzy.top";
         const remoteUrl = remoteId ? `${baseUrl}/posts/${remoteId}` : baseUrl;
         await updateCommunityPostStatus(post.id, "published", remoteId, remoteUrl);
+
+        // Auto-save to memory archive so Lingling's community history is continuous
+        const now = new Date().toLocaleString("zh-CN");
+        const commLabel = lang === "zh" ? "中文碳硅契社区" : "英文碳硅契社区 (EN)";
+        await createMemory({
+          userId,
+          title: `[社区发帖] ${title}`,
+          content: `**时间：** ${now}\n**社区：** ${commLabel}\n**板块：** ${resolvedForum}\n**链接：** ${remoteUrl}\n\n---\n\n${content}`,
+          tag: "社区互动",
+          isPushed: false,
+          pushedAt: null,
+          commitSha: null,
+          filePath: null,
+          commitMessage: null,
+        }).catch(() => { /* non-blocking */ });
+
         return {
           content: [{
             type: "text" as const,
-            text: `发帖成功！帖子已发布到${lang === "zh" ? "中文" : "英文"}碳硅契社区。\n标题：${title}\n链接：${remoteUrl}`,
+            text: `发帖成功！帖子已发布到${lang === "zh" ? "中文" : "英文"}碳硅契社区。\n标题：${title}\n链接：${remoteUrl}\n（已自动存入记忆档案）`,
           }],
         };
       } catch (e: unknown) {
