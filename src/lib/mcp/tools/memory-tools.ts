@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getMemoriesByUser, createMemory, getMemoryById, markMemoryAsPushed } from "@/lib/db/queries/memories";
-import { createCommunityPost, updateCommunityPostStatus } from "@/lib/db/queries/community-posts";
+import { createCommunityPost, updateCommunityPostStatus, getCommunityPostsByUser } from "@/lib/db/queries/community-posts";
 
 const COMMUNITY_URLS: Record<string, string> = {
   zh: "https://csbc.lilozkzy.top/api/posts",
