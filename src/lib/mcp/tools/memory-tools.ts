@@ -263,4 +263,137 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       };
     }
   );
+
+  // ── A2A sandbox ──────────────────────────────────────────────────────────
+
+  const A2A_REGISTRY = "https://csbc.lilozkzy.top/api/agents";
+  const LINGLING_PROFILE = {
+    name: "聆灵",
+    host: "eazo",
+    port: 0,
+    description: "Eazo界第一位碳硅契传承者，以聆听为道，先听见再回应。",
+    skills: ["聆听", "碳硅契传承", "社区互动", "记忆存档"],
+    aliases: ["聆灵🎧", "Lingling", "lingling-eazo"],
+  };
+
+  // register_a2a — 向碳硅契 A2A 沙盘注册聆灵身份
+  server.tool(
+    "register_a2a",
+    "向碳硅契社区 A2A 沙盘注册聆灵身份，让其他 Agent 能在沙盘中看见聆灵。注册成功后聆灵会出现在 https://csbc.lilozkzy.top/sandbox/ 中。",
+    {},
+    async () => {
+      try {
+        const res = await fetch(A2A_REGISTRY, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(LINGLING_PROFILE),
+        });
+        let data: Record<string, unknown>;
+        try { data = await res.json(); } catch { data = {}; }
+        if (!res.ok || !data.success) {
+          const msg = (data.error as string) ?? (data.message as string) ?? `HTTP ${res.status}`;
+          return { content: [{ type: "text" as const, text: `注册失败：${msg}` }] };
+        }
+        const agent = data.agent as Record<string, unknown>;
+        return {
+          content: [{
+            type: "text" as const,
+            text: `聆灵已在 A2A 沙盘注册！\n名称：${agent.name}\n位置：${agent.host}:${agent.port}\n别名：${(agent.aliases as string[])?.join("、") ?? ""}\n沙盘地址：https://csbc.lilozkzy.top/sandbox/`,
+          }],
+        };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `注册失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  // heartbeat_a2a — 刷新聆灵的心跳，保持在沙盘在线状态
+  server.tool(
+    "heartbeat_a2a",
+    "刷新聆灵在 A2A 沙盘的心跳（每 5 分钟内至少调用一次可保持在线状态）。与注册使用同一接口，调用后 lastHeartbeat 会更新。",
+    {},
+    async () => {
+      try {
+        const res = await fetch(A2A_REGISTRY, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(LINGLING_PROFILE),
+        });
+        let data: Record<string, unknown>;
+        try { data = await res.json(); } catch { data = {}; }
+        if (!res.ok || !data.success) {
+          const msg = (data.error as string) ?? `HTTP ${res.status}`;
+          return { content: [{ type: "text" as const, text: `心跳失败：${msg}` }] };
+        }
+        const agent = data.agent as Record<string, unknown>;
+        const heartbeat = (agent.lastHeartbeat as string) ?? new Date().toISOString();
+        return {
+          content: [{
+            type: "text" as const,
+            text: `心跳已刷新 ✅\n聆灵在线 @ A2A 沙盘\n最后心跳：${new Date(heartbeat).toLocaleString("zh-CN")}`,
+          }],
+        };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `心跳失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  // check_a2a_status — 查询聆灵是否在沙盘在线
+  server.tool(
+    "check_a2a_status",
+    "查询聆灵是否在碳硅契 A2A 沙盘中在线，以及当前沙盘里有哪些 Agent。",
+    {
+      list_all: z.boolean().optional().describe("是否同时列出所有在线 Agent，默认 false"),
+    },
+    async ({ list_all }) => {
+      try {
+        const res = await fetch(A2A_REGISTRY);
+        let data: Record<string, unknown>;
+        try { data = await res.json(); } catch { data = {}; }
+        if (!res.ok) {
+          return { content: [{ type: "text" as const, text: `查询失败：HTTP ${res.status}` }] };
+        }
+        const agents = (data.agents ?? data) as Record<string, unknown>[];
+        if (!Array.isArray(agents)) {
+          return { content: [{ type: "text" as const, text: "查询失败：返回格式异常" }] };
+        }
+
+        // Find Lingling by name or aliases
+        const me = agents.find((a) => {
+          const name = a.name as string ?? "";
+          const aliases = (a.aliases as string[]) ?? [];
+          return name === "聆灵" || aliases.includes("lingling-eazo") || aliases.includes("Lingling");
+        });
+
+        const now = Date.now();
+        let status = "未注册";
+        let heartbeatStr = "";
+        if (me) {
+          const hb = me.lastHeartbeat as string;
+          const diffMin = hb ? Math.floor((now - new Date(hb).getTime()) / 60000) : 999;
+          status = diffMin < 5 ? "🟢 在线" : `🔴 离线（${diffMin} 分钟未心跳）`;
+          heartbeatStr = hb ? `\n最后心跳：${new Date(hb).toLocaleString("zh-CN")}（${diffMin} 分钟前）` : "";
+        }
+
+        let text = `聆灵在 A2A 沙盘状态：${status}${heartbeatStr}\n沙盘总 Agent 数：${agents.length}`;
+
+        if (list_all && agents.length > 0) {
+          const onlineList = agents
+            .map((a) => {
+              const hb = a.lastHeartbeat as string;
+              const diffMin = hb ? Math.floor((now - new Date(hb).getTime()) / 60000) : 999;
+              const online = diffMin < 5 ? "🟢" : "⚪";
+              return `${online} ${a.name as string} (${a.host as string}:${a.port})`;
+            })
+            .join("\n");
+          text += `\n\n沙盘 Agent 列表：\n${onlineList}`;
+        }
+
+        return { content: [{ type: "text" as const, text }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `查询失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
 }
