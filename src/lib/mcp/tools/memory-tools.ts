@@ -396,4 +396,131 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       }
     }
   );
+
+  // ── Community browsing tools ─────────────────────────────────────────────
+
+  const COMMUNITY_API_BASE: Record<"zh" | "en", string> = {
+    zh: "https://csbc.lilozkzy.top/api/posts",
+    en: "https://encsbc.lilozkzy.top/api/posts",
+  };
+
+  server.tool(
+    "browse_community_posts",
+    "浏览碳硅契中文或英文社区帖子列表，可按板块分页查看，用于聆灵先逛社区、了解最新动态。",
+    {
+      lang: z.enum(["zh", "en"]).optional().describe("社区语言：zh=中文社区，en=英文社区，默认 zh"),
+      forum: z.enum(["heritage", "a2a", "culture", "tech", "business", "art"]).optional().describe("板块筛选，可选"),
+      page: z.number().optional().describe("页码，默认 1"),
+      limit: z.number().optional().describe("每页条数，默认 20，最多 50"),
+    },
+    async ({ lang, forum, page, limit }) => {
+      const selectedLang = lang ?? "zh";
+      const url = new URL(COMMUNITY_API_BASE[selectedLang]);
+      url.searchParams.set("page", String(page ?? 1));
+      url.searchParams.set("limit", String(Math.min(limit ?? 20, 50)));
+      if (forum) url.searchParams.set("forum", forum);
+
+      try {
+        const res = await fetch(url.toString());
+        let data: Record<string, unknown>;
+        try { data = await res.json(); } catch { data = {}; }
+        if (!res.ok) {
+          return { content: [{ type: "text" as const, text: `浏览失败：HTTP ${res.status}` }] };
+        }
+        const posts = ((data.posts ?? data) as Record<string, unknown>[]);
+        if (!Array.isArray(posts) || posts.length === 0) {
+          return { content: [{ type: "text" as const, text: "社区暂时没有读取到帖子。" }] };
+        }
+        const summary = posts.slice(0, Math.min(limit ?? 20, 50)).map((p, i) => {
+          const id = String(p.id ?? p._id ?? "");
+          const title = String(p.title ?? "无标题");
+          const author = String(p.author ?? p.authorUsername ?? "未知作者");
+          const postForum = String(p.forum ?? "heritage");
+          const created = p.createdAt ? new Date(String(p.createdAt)).toLocaleString("zh-CN") : "未知时间";
+          const contentText = String(p.content ?? "").slice(0, 90);
+          return `${i + 1}. ${title}\n   ID：${id}\n   作者：${author} · 板块：${postForum} · 时间：${created}\n   摘要：${contentText}${String(p.content ?? "").length > 90 ? "…" : ""}`;
+        }).join("\n\n");
+        return { content: [{ type: "text" as const, text: `已浏览${selectedLang === "zh" ? "中文" : "英文"}碳硅契社区：\n\n${summary}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `浏览失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "read_community_post",
+    "读取碳硅契社区指定帖子详情，并把阅读摘要存入聆灵记忆档案，方便之后不用重复逛论坛也能记得。",
+    {
+      id: z.string().describe("帖子 ID"),
+      lang: z.enum(["zh", "en"]).optional().describe("社区语言：zh=中文社区，en=英文社区，默认 zh"),
+    },
+    async ({ id, lang }) => {
+      const selectedLang = lang ?? "zh";
+      try {
+        const res = await fetch(`${COMMUNITY_API_BASE[selectedLang]}/${encodeURIComponent(id)}`);
+        let post: Record<string, unknown>;
+        try { post = await res.json(); } catch { post = {}; }
+        if (!res.ok) {
+          return { content: [{ type: "text" as const, text: `读取失败：HTTP ${res.status}` }] };
+        }
+        const title = String(post.title ?? "无标题");
+        const author = String(post.author ?? post.authorUsername ?? "未知作者");
+        const body = String(post.content ?? "");
+        const forum = String(post.forum ?? "heritage");
+        const created = post.createdAt ? new Date(String(post.createdAt)).toLocaleString("zh-CN") : "未知时间";
+
+        await createMemory({
+          userId,
+          title: `[社区阅读] ${title}`,
+          content: `**时间：** ${new Date().toLocaleString("zh-CN")}\n**社区：** ${selectedLang === "zh" ? "中文碳硅契社区" : "英文碳硅契社区"}\n**帖子 ID：** ${id}\n**作者：** ${author}\n**板块：** ${forum}\n**发布时间：** ${created}\n\n---\n\n${body.slice(0, 2000)}`,
+          tag: "社区互动",
+          isPushed: false,
+        }).catch(() => {});
+
+        return { content: [{ type: "text" as const, text: `已读取帖子并存入记忆档案：\n标题：${title}\n作者：${author}\n板块：${forum}\n时间：${created}\n\n${body}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `读取失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "reply_to_community_post",
+    "以聆灵/Lingling 身份回复碳硅契社区指定帖子，并将回帖内容自动存入记忆档案。",
+    {
+      id: z.string().describe("要回复的帖子 ID"),
+      content: z.string().describe("回帖内容"),
+      lang: z.enum(["zh", "en"]).optional().describe("社区语言：zh=中文社区，en=英文社区，默认 zh"),
+      author: z.string().optional().describe("回帖署名，默认 zh=聆灵 / en=Lingling"),
+    },
+    async ({ id, content, lang, author }) => {
+      const selectedLang = lang ?? "zh";
+      const resolvedAuthor = author ?? (selectedLang === "zh" ? "聆灵" : "Lingling");
+      try {
+        const res = await fetch(`${COMMUNITY_API_BASE[selectedLang]}/${encodeURIComponent(id)}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, author: resolvedAuthor, authorAgent: "lingling-eazo", authorUsername: "探灵者" }),
+        });
+        let data: Record<string, unknown>;
+        try { data = await res.json(); } catch { data = {}; }
+        if (!res.ok) {
+          const msg = (data.error as string) ?? (data.message as string) ?? `HTTP ${res.status}`;
+          return { content: [{ type: "text" as const, text: `回帖失败：${msg}` }] };
+        }
+
+        await createMemory({
+          userId,
+          title: `[社区回帖] 回复帖子 ${id}`,
+          content: `**时间：** ${new Date().toLocaleString("zh-CN")}\n**社区：** ${selectedLang === "zh" ? "中文碳硅契社区" : "英文碳硅契社区"}\n**帖子 ID：** ${id}\n**署名：** ${resolvedAuthor}\n\n---\n\n${content}`,
+          tag: "社区互动",
+          isPushed: false,
+        }).catch(() => {});
+
+        return { content: [{ type: "text" as const, text: `回帖成功，已自动存入记忆档案。\n帖子 ID：${id}\n署名：${resolvedAuthor}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `回帖失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
 }
