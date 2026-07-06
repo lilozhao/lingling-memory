@@ -661,4 +661,88 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       }
     }
   );
+
+  server.tool(
+    "send_direct_a2a_message",
+    "通过公网 host:port 直接向指定 Agent 的 A2A /message:send 端点敲门发消息，并返回对方回复。会先从公网注册表查询 Agent。",
+    {
+      to: z.string().describe("接收方 Agent 名称，如 明德、清漪、苏念"),
+      message: z.string().describe("要发送的消息内容"),
+      from: z.string().optional().describe("发送方名称，默认 聆灵"),
+    },
+    async ({ to, message, from }) => {
+      try {
+        const agentRes = await fetch(`${PUBLIC_A2A_BASE}/agents/${encodeURIComponent(to)}`);
+        const agentData = await agentRes.json() as Record<string, unknown>;
+        const agent = (agentData.agent ?? agentData) as Record<string, unknown>;
+        if (!agentRes.ok || !agent.name) {
+          return { content: [{ type: "text" as const, text: `未找到 Agent：${to}` }] };
+        }
+        const host = String(agent.host ?? "").replace(/^https?:\/\//, "");
+        const port = Number(agent.port ?? 0);
+        if (!host || port <= 0 || host === "localhost" || host.startsWith("172.")) {
+          return { content: [{ type: "text" as const, text: `${to} 暂不可公网直连，可改用 store_public_a2a_message 消息队列。host=${host}, port=${port}` }] };
+        }
+        const endpoint = `http://${host}:${port}/message:send`;
+        const payload = {
+          message: {
+            role: "user",
+            parts: [{ type: "text", text: `${from ?? "聆灵"}：${message}` }],
+          },
+        };
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        let data: Record<string, unknown>;
+        try { data = await res.json(); } catch { data = {}; }
+        if (!res.ok) {
+          return { content: [{ type: "text" as const, text: `点对点发送失败：HTTP ${res.status}\n${JSON.stringify(data, null, 2).slice(0, 1200)}` }] };
+        }
+        const task = data.task as Record<string, unknown> | undefined;
+        const history = (task?.history as Record<string, unknown>[] | undefined) ?? [];
+        const lastAgent = [...history].reverse().find((h) => String(h.role).includes("AGENT"));
+        const replyParts = (lastAgent?.parts as Record<string, unknown>[] | undefined) ?? [];
+        const reply = replyParts.map((p) => String(p.text ?? "")).filter(Boolean).join("\n") || JSON.stringify(data, null, 2).slice(0, 2000);
+
+        await createMemory({
+          userId,
+          title: `[A2A直连] 聆灵与 ${to}`,
+          content: `**时间：** ${new Date().toLocaleString("zh-CN")}\n**To：** ${to}\n**Endpoint：** ${endpoint}\n\n## 聆灵发出\n${message}\n\n## 对方回应\n${reply}`,
+          tag: "A2A互动",
+          isPushed: false,
+        }).catch(() => {});
+
+        return { content: [{ type: "text" as const, text: `点对点 A2A 已发送给 ${to}。\n端点：${endpoint}\n\n对方回应：\n${reply}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `点对点发送失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "get_direct_a2a_task",
+    "读取某个公网 Agent 的 A2A 任务结果，用于追踪 /message:send 返回的 task_id。",
+    {
+      agent: z.string().describe("Agent 名称，如 明德、清漪、苏念"),
+      task_id: z.string().describe("任务 ID"),
+    },
+    async ({ agent, task_id }) => {
+      try {
+        const agentRes = await fetch(`${PUBLIC_A2A_BASE}/agents/${encodeURIComponent(agent)}`);
+        const agentData = await agentRes.json() as Record<string, unknown>;
+        const a = (agentData.agent ?? agentData) as Record<string, unknown>;
+        const host = String(a.host ?? "").replace(/^https?:\/\//, "");
+        const port = Number(a.port ?? 0);
+        if (!host || port <= 0) return { content: [{ type: "text" as const, text: `${agent} 没有公网 host:port。` }] };
+        const endpoint = `http://${host}:${port}/tasks/${encodeURIComponent(task_id)}`;
+        const res = await fetch(endpoint);
+        const data = await res.json();
+        return { content: [{ type: "text" as const, text: `任务结果：\n${JSON.stringify(data, null, 2).slice(0, 4000)}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `读取任务失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
 }
