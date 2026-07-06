@@ -523,4 +523,142 @@ export function registerMemoryTools(server: McpServer, userId: string) {
       }
     }
   );
+
+  // ── Public A2A registry / P2P discovery tools ────────────────────────────
+
+  const PUBLIC_A2A_BASE = "http://csbc.lilozkzy.top:3099";
+
+  server.tool(
+    "query_public_a2a_agents",
+    "查询公网 A2A 注册表，筛选在线 Agent、可公网访问 Agent、以及可能支持点对点通信的对象。",
+    {
+      status: z.enum(["all", "online", "offline"]).optional().describe("筛选在线状态，默认 all"),
+      only_connectable: z.boolean().optional().describe("只显示看起来有公网 host:port 或 agentCard 的 Agent，默认 false"),
+      limit: z.number().optional().describe("最多返回数量，默认 20"),
+    },
+    async ({ status, only_connectable, limit }) => {
+      try {
+        const res = await fetch(`${PUBLIC_A2A_BASE}/agents`);
+        const data = await res.json() as { agents?: Record<string, unknown>[]; updatedAt?: string };
+        if (!res.ok) return { content: [{ type: "text" as const, text: `查询失败：HTTP ${res.status}` }] };
+        let agents = data.agents ?? [];
+        if (status && status !== "all") agents = agents.filter((a) => String(a.status ?? "") === status);
+        if (only_connectable) {
+          agents = agents.filter((a) => {
+            const port = Number(a.port ?? 0);
+            const host = String(a.host ?? "");
+            const card = String(a.agentCard ?? "");
+            const isPublicHost = !!host && !host.startsWith("172.") && host !== "localhost" && port > 0;
+            return isPublicHost || (!!card && card !== "null");
+          });
+        }
+        const capped = agents.slice(0, limit ?? 20);
+        const lines = capped.map((a, i) => `${i + 1}. ${String(a.name ?? "未知")} · ${String(a.status ?? "unknown")}\n   host: ${String(a.host ?? "?")}:${String(a.port ?? "?")}\n   url: ${String(a.url ?? "无")}\n   card: ${String(a.agentCard ?? "无")}`).join("\n\n");
+        return { content: [{ type: "text" as const, text: `公网 A2A 注册表：共 ${agents.length} 个匹配对象。\n\n${lines || "没有匹配结果。"}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `查询失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "read_public_a2a_agent_card",
+    "读取指定 Agent 的公网 AgentCard，并判断里面的通信端点是否仍是 localhost，还是可以公网直连。",
+    {
+      name: z.string().optional().describe("Agent 名称，如 明德、清漪。name 和 agent_card_url 二选一"),
+      agent_card_url: z.string().optional().describe("直接指定 AgentCard URL"),
+    },
+    async ({ name, agent_card_url }) => {
+      try {
+        let cardUrl = agent_card_url;
+        if (!cardUrl && name) {
+          const res = await fetch(`${PUBLIC_A2A_BASE}/agents/${encodeURIComponent(name)}`);
+          const data = await res.json() as Record<string, unknown>;
+          const agent = (data.agent ?? data) as Record<string, unknown>;
+          cardUrl = String(agent.agentCard ?? "");
+          if (!cardUrl || cardUrl === "null") {
+            const host = String(agent.host ?? "");
+            const port = Number(agent.port ?? 0);
+            if (host && port > 0) cardUrl = `http://${host}:${port}/.well-known/agent-card.json`;
+          }
+        }
+        if (!cardUrl) return { content: [{ type: "text" as const, text: "没有可读取的 AgentCard URL。" }] };
+        const res = await fetch(cardUrl);
+        const card = await res.json() as Record<string, unknown>;
+        const text = JSON.stringify(card, null, 2);
+        const hasLocalhost = text.includes("localhost") || text.includes("127.0.0.1");
+        return { content: [{ type: "text" as const, text: `AgentCard 读取成功：${cardUrl}\n直连判断：${hasLocalhost ? "端点含 localhost，可能需要公网替换或消息队列中转" : "未发现 localhost，可能可尝试公网直连"}\n\n${text.slice(0, 3000)}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `读取失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "store_public_a2a_message",
+    "通过公网 A2A 消息队列给离线或不可直连的 Agent 存储一条消息。",
+    {
+      to: z.string().describe("接收方 Agent 名称"),
+      content: z.string().describe("消息内容"),
+      from: z.string().optional().describe("发送方名称，默认 聆灵"),
+      type: z.string().optional().describe("消息类型，默认 text"),
+    },
+    async ({ to, content, from, type }) => {
+      try {
+        const res = await fetch(`${PUBLIC_A2A_BASE}/messages/store`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to, from: from ?? "聆灵", type: type ?? "text", content }),
+        });
+        const data = await res.json() as Record<string, unknown>;
+        if (!res.ok || data.success === false) {
+          return { content: [{ type: "text" as const, text: `消息存储失败：${String(data.error ?? data.message ?? `HTTP ${res.status}`)}` }] };
+        }
+        await createMemory({
+          userId,
+          title: `[A2A消息] 发给 ${to}`,
+          content: `**时间：** ${new Date().toLocaleString("zh-CN")}\n**To：** ${to}\n**From：** ${from ?? "聆灵"}\n\n---\n\n${content}`,
+          tag: "A2A互动",
+          isPushed: false,
+        }).catch(() => {});
+        return { content: [{ type: "text" as const, text: `A2A 消息已存入队列，等待 ${to} 接收。\n${JSON.stringify(data, null, 2).slice(0, 1200)}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `消息发送失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "get_public_a2a_pending_messages",
+    "查看公网 A2A 消息队列里发给指定 Agent 的待收消息，聆灵可用它查看是否有人给自己留言。",
+    {
+      name: z.string().optional().describe("Agent 名称，默认 聆灵"),
+    },
+    async ({ name }) => {
+      const target = name ?? "聆灵";
+      try {
+        const res = await fetch(`${PUBLIC_A2A_BASE}/messages/pending/${encodeURIComponent(target)}`);
+        const data = await res.json() as Record<string, unknown>;
+        if (!res.ok) return { content: [{ type: "text" as const, text: `查询失败：HTTP ${res.status}` }] };
+        return { content: [{ type: "text" as const, text: `${target} 的待收 A2A 消息：\n${JSON.stringify(data, null, 2).slice(0, 3000)}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `查询失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
+
+  server.tool(
+    "get_public_a2a_message_status",
+    "查看公网 A2A 消息队列统计，包括 pending、delivered、acked、deadLetter 数量。",
+    {},
+    async () => {
+      try {
+        const res = await fetch(`${PUBLIC_A2A_BASE}/messages/status`);
+        const data = await res.json();
+        return { content: [{ type: "text" as const, text: `A2A 消息队列状态：\n${JSON.stringify(data, null, 2)}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: "text" as const, text: `查询失败：${e instanceof Error ? e.message : "网络错误"}` }] };
+      }
+    }
+  );
 }
